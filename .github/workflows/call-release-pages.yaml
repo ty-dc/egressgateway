@@ -5,7 +5,6 @@ env:
   PR_LABEL: pr/robot_update
   PR_REVIEWER: lou-lan
   DEST_DIRECTORY: 'docs'
-  CHART_OUTPUT_PATH: output/chart/*
 
 on:
   workflow_call:
@@ -13,10 +12,6 @@ on:
       ref:
         required: true
         type: string
-    outputs:
-      artifact:
-        description: "name of chart artifact"
-        value: chart_package_artifact
   # --- call by manual
   workflow_dispatch:
     inputs:
@@ -124,29 +119,6 @@ jobs:
           retention-days: 0
           if-no-files-found: error
 
-      - name: Install yq
-        run: |
-          YQ_VERSION=v4.33.1
-          YQ_BINARY="yq_$(uname | tr 'A-Z' 'a-z')_amd64"
-          wget https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}.tar.gz -O /tmp/yq.tar.gz
-          tar -xzf /tmp/yq.tar.gz -C /tmp
-          sudo mv /tmp/${YQ_BINARY} /usr/bin/yq
-          sudo chmod +x /usr/bin/yq
-          yq &>/dev/null || exit 1
-
-      - name: Build chart
-        run: |
-          git checkout -f ${{ env.REF }}
-          make chart_package
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v3.1.2
-        with:
-          name: chart_package_artifact
-          path: ${{ env.CHART_OUTPUT_PATH }}
-          retention-days: 1
-          if-no-files-found: error
-
   create_pr:
     name: Create PR
     needs: [package]
@@ -172,33 +144,14 @@ jobs:
           cd docs
           tar -xzvf site.tar.gz
           rm -f site.tar.gz
-      
-      ## chart
-      - name: Install Helm
-        uses: azure/setup-helm@v3.5
-
-      - name: Download Chart Artifact
-        uses: actions/download-artifact@v3.0.2
-        with:
-          name: chart_package_artifact
-          path: docs/charts/
-
-      - name: Update Chart Yaml
-        run: |
-          name=${{ github.repository }}
-          proj=${name#*/}
-          url=https://${{ github.repository_owner }}.github.io/${proj}
-          cd docs
-          helm repo index  ./charts  --url ${url}/charts
-          mv ./charts/index.yaml ./index.yaml
 
       # Allow auto-merge on general
       - name: Create Pull Request
         id: create_pr
         uses: peter-evans/create-pull-request@v5.0.2
         with:
-          title: "robot update website or chart from ${{ needs.package.outputs.REF }} to branch ${{ env.MERGE_BRANCH }} "
-          commit-message: "robot update website or chart from  ${{ needs.package.outputs.REF }} to branch ${{ env.MERGE_BRANCH }} "
+          title: "robot update website from ${{ needs.package.outputs.REF }} to branch ${{ env.MERGE_BRANCH }} "
+          commit-message: "robot update website from  ${{ needs.package.outputs.REF }} to branch ${{ env.MERGE_BRANCH }} "
           branch-suffix: timestamp
           branch: robot/update_doc
           delete-branch: true
